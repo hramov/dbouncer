@@ -1,0 +1,11 @@
+port: 2379
+timeout: 30s
+storages:
+  - id: 1
+    name: 'postgres'
+    dsn: 'postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable'
+    pool_max: 5
+    pool_min: 1
+    idle_max: 5
+    idle_min: 1
+    idle_timeout: '60s'
