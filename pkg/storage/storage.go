@@ -18,7 +18,7 @@ type storageMap = map[string]internal.Storage
 
 var storages storageMap
 
-func (s *storage) QueryTx(ctx context.Context, query string, args ...interface{}) ([]byte, error) {
+func (s *storage) QueryTx(ctx context.Context, query string, args ...interface{}) ([]string, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelReadCommitted,
 		ReadOnly:  false,
@@ -37,11 +37,11 @@ func (s *storage) QueryTx(ctx context.Context, query string, args ...interface{}
 	return jsonify.Jsonify(rows), nil
 }
 
-func (s *storage) QueryRowTx(ctx context.Context, query string, args ...interface{}) ([]byte, error) {
+func (s *storage) QueryRowTx(ctx context.Context, query string, args ...interface{}) ([]string, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (s *storage) ExecTx(ctx context.Context, query string, args ...interface{}) ([]byte, error) {
+func (s *storage) ExecTx(ctx context.Context, query string, args ...interface{}) ([]string, error) {
 	return nil, errors.New("not implemented")
 }
 

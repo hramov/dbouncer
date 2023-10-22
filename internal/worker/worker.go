@@ -64,7 +64,7 @@ func (w *Worker) process(ctx context.Context, query *internal.QueryRequest) (*in
 		return nil, fmt.Errorf("unknown database: %s", query.Database)
 	}
 
-	var data []byte
+	var data []string
 	var err error
 
 	switch query.Kind {
@@ -82,7 +82,7 @@ func (w *Worker) process(ctx context.Context, query *internal.QueryRequest) (*in
 			AppId:  query.AppId,
 			Kind:   query.Kind,
 			Error:  true,
-			Result: []byte(err.Error()),
+			Result: err.Error(),
 		}, nil
 	}
 

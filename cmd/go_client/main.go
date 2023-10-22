@@ -33,7 +33,7 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println(string(response.Result))
+			fmt.Println(response.Result)
 			appId = response.AppId
 		}
 	}()

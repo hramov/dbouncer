@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func Jsonify(rows *sql.Rows) []byte {
+func Jsonify(rows *sql.Rows) []string {
 	columns, err := rows.Columns()
 	if err != nil {
 		panic(err.Error())
@@ -22,7 +22,7 @@ func Jsonify(rows *sql.Rows) []byte {
 
 	c := 0
 	results := make(map[string]interface{})
-	data := []string{}
+	var data []string
 
 	for rows.Next() {
 		if c > 0 {
@@ -41,7 +41,8 @@ func Jsonify(rows *sql.Rows) []byte {
 
 			case []byte:
 				s := string(value.([]byte))
-				x, err := strconv.Atoi(s)
+				var x int
+				x, err = strconv.Atoi(s)
 
 				if err != nil {
 					results[columns[i]] = s
@@ -59,11 +60,5 @@ func Jsonify(rows *sql.Rows) []byte {
 		c++
 	}
 
-	var result []byte
-
-	for _, v := range data {
-		result = append(result, []byte(v)...)
-	}
-
-	return result
+	return data
 }
