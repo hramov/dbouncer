@@ -37,10 +37,25 @@ func main() {
 	respCh := make(chan *internal.QueryResponse)
 	errCh := make(chan error)
 
+	go func() {
+		var ok bool
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err, ok = <-errCh:
+				if !ok {
+					return
+				}
+				log.Printf("error: %v\n", err)
+			}
+		}
+	}()
+
 	var server *v1.Server
 	server, err = v1.NewServer(cfg.Port, cfg.Timeout, queryCh, respCh, errCh)
 
-	for i := 0; i < len(cfg.Storages); i++ {
+	for i := 1; i <= len(cfg.Storages); i++ {
 		var w *worker.Worker
 		w, err = worker.NewWorker(i, queryCh, errCh, respCh, cfg.Storages)
 		if err != nil {

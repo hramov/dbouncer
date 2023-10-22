@@ -14,7 +14,11 @@ type storage struct {
 	db *sql.DB
 }
 
-func (s *storage) QueryTx(ctx context.Context, query string, args ...interface{}) ([]string, error) {
+type storageMap = map[string]internal.Storage
+
+var storages storageMap
+
+func (s *storage) QueryTx(ctx context.Context, query string, args ...interface{}) ([]byte, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelReadCommitted,
 		ReadOnly:  false,
@@ -33,25 +37,45 @@ func (s *storage) QueryTx(ctx context.Context, query string, args ...interface{}
 	return jsonify.Jsonify(rows), nil
 }
 
-func (s *storage) QueryRowTx(ctx context.Context, query string, args ...interface{}) ([]string, error) {
+func (s *storage) QueryRowTx(ctx context.Context, query string, args ...interface{}) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (s *storage) ExecTx(ctx context.Context, query string, args ...interface{}) ([]string, error) {
+func (s *storage) ExecTx(ctx context.Context, query string, args ...interface{}) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
 func New(name string, dsn string) (internal.Storage, error) {
-	switch name {
-	case "postgres":
-		db, err := drivers.NewPostgres(dsn)
-		if err != nil {
-			return nil, err
-		}
-		return &storage{
-			db: db,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown storage: %s", name)
+	if storages == nil {
+		storages = make(storageMap)
 	}
+
+	if _, ok := storages[name]; !ok {
+		switch name {
+		case "postgres":
+			db, err := drivers.NewPostgres(dsn)
+			if err != nil {
+				return nil, err
+			}
+
+			st := &storage{
+				db: db,
+			}
+
+			storages["postgres"] = st
+			return st, nil
+		default:
+			return nil, fmt.Errorf("unknown storage: %s", name)
+		}
+	}
+
+	return storages[name], nil
+}
+
+func GetStorage(name string) internal.Storage {
+	st, ok := storages[name]
+	if !ok {
+		return nil
+	}
+	return st
 }

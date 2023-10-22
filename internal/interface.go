@@ -7,9 +7,9 @@ import (
 )
 
 type Storage interface {
-	QueryTx(ctx context.Context, query string, args ...interface{}) ([]string, error)
-	QueryRowTx(ctx context.Context, query string, args ...interface{}) ([]string, error)
-	ExecTx(ctx context.Context, query string, args ...interface{}) ([]string, error)
+	QueryTx(ctx context.Context, query string, args ...interface{}) ([]byte, error)
+	QueryRowTx(ctx context.Context, query string, args ...interface{}) ([]byte, error)
+	ExecTx(ctx context.Context, query string, args ...interface{}) ([]byte, error)
 }
 
 type QueryKind string
@@ -34,12 +34,13 @@ type QueryResponse struct {
 	AppId  uuid.UUID `json:"app_id"`
 	Kind   QueryKind `json:"kind"`
 	Error  bool      `json:"error"`
-	Result any       `json:"result"`
+	Result []byte    `json:"result"`
 }
 
 type App struct {
-	Id   uuid.UUID
-	Conn net.Conn
+	Id      uuid.UUID
+	Conn    net.Conn
+	QueryId int
 }
 
 type Apps map[uuid.UUID]App
