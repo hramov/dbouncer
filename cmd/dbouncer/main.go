@@ -6,6 +6,8 @@ import (
 	v1 "github.com/hramov/dbouncer/internal/adapter/v1"
 	"github.com/hramov/dbouncer/internal/config"
 	"github.com/hramov/dbouncer/internal/worker"
+	"github.com/hramov/dbouncer/pkg/metrics"
+	"github.com/hramov/dbouncer/pkg/storage"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
@@ -34,8 +36,9 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 
 	queryCh := make(chan *internal.QueryRequest)
-	respCh := make(chan *internal.QueryResponse)
 	errCh := make(chan error)
+	respCh := make(chan *internal.QueryResponse)
+	statCh := make(chan map[string]int)
 
 	go func() {
 		var ok bool
@@ -55,17 +58,23 @@ func main() {
 	var server *v1.Server
 	server, err = v1.NewServer(cfg.Port, cfg.Timeout, queryCh, respCh, errCh)
 
-	for i := 1; i <= len(cfg.Storages); i++ {
-		var w *worker.Worker
-		w, err = worker.NewWorker(i, queryCh, errCh, respCh, cfg.Storages)
-		if err != nil {
-			log.Fatalf("cannot create worker: %v\n", err)
+	for _, st := range cfg.Storages {
+		var db internal.Storage
+		db, err = storage.New(st.Name, st.Dsn, st.PoolMax, st.IdleMax, st.IdleTimeout, st.LifeTime)
+		for i := 0; i < st.Workers; i++ {
+			var w *worker.Worker
+			w, err = worker.NewWorker(i, queryCh, errCh, respCh, statCh, st.Name, db)
+			if err != nil {
+				log.Fatalf("cannot create worker: %v\n", err)
+			}
+			go w.Process(ctx)
 		}
-		go w.Process(ctx)
 	}
 
 	go server.Response(ctx)
 	go server.Serve(ctx)
+
+	go metrics.Collect(ctx, cfg.MetricsPort, statCh)
 
 	<-ctx.Done()
 	cancel()

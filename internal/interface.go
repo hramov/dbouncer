@@ -23,6 +23,7 @@ const (
 type QueryRequest struct {
 	Id       int       `json:"id"`
 	AppId    uuid.UUID `json:"app_id"`
+	AppName  string    `json:"app_name"`
 	Database string    `json:"database"`
 	Kind     QueryKind `json:"kind"`
 	Query    string    `json:"query"`

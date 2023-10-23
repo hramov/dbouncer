@@ -3,3 +3,7 @@ run_server:
 
 run_client:
 	go run ./cmd/client/main.go
+
+build:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-extldflags "-static"' -o ./bin/dbouncer ./cmd/dbouncer/main.go
+	cp ./config.yml ./bin/config.yml

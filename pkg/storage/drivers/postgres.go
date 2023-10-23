@@ -11,7 +11,7 @@ import (
 
 func NewPostgres(dsn string) (*sql.DB, error) {
 	var db *sql.DB
-	var err error = errors.New("trying to connect to database")
+	var err error = errors.New("trying to connect to Postgres")
 
 	counter := 0
 

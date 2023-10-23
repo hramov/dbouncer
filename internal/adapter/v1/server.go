@@ -165,7 +165,7 @@ func (s *Server) handle(ctx context.Context, conn net.Conn) {
 
 			s.apps[id] = *app
 			query.AppId = id
-			log.Println("creating new app with id", id)
+			log.Println("creating new app with id", query.AppId, "and name", query.AppName)
 		}
 
 		app := s.apps[query.AppId]

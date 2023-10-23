@@ -4,54 +4,79 @@ import (
 	"context"
 	"fmt"
 	"github.com/hramov/dbouncer/internal"
-	"github.com/hramov/dbouncer/internal/config"
 	"github.com/hramov/dbouncer/pkg/storage"
 	"log"
+	"time"
 )
 
 type Worker struct {
-	id      int
-	queryCh <-chan *internal.QueryRequest
-	respCh  chan<- *internal.QueryResponse
-	errCh   chan<- error
-	dbs     map[int]*internal.Storage
+	id            int
+	queryCh       chan *internal.QueryRequest
+	errCh         chan<- error
+	respCh        chan<- *internal.QueryResponse
+	statCh        chan map[string]int
+	dbName        string
+	db            internal.Storage
+	queriesForApp map[string]int
+	queriesAll    int
 }
 
-func NewWorker(id int, queryCh <-chan *internal.QueryRequest, errCh chan<- error, respCh chan<- *internal.QueryResponse, storages []config.Storage) (*Worker, error) {
+func NewWorker(id int, queryCh chan *internal.QueryRequest, errCh chan<- error, respCh chan<- *internal.QueryResponse, statCh chan map[string]int, dbName string, storage internal.Storage) (*Worker, error) {
 	w := &Worker{
-		id:      id,
-		queryCh: queryCh,
-		errCh:   errCh,
-		respCh:  respCh,
-		dbs:     make(map[int]*internal.Storage),
+		id:            id,
+		queryCh:       queryCh,
+		errCh:         errCh,
+		respCh:        respCh,
+		statCh:        statCh,
+		dbName:        dbName,
+		db:            storage,
+		queriesForApp: make(map[string]int),
 	}
-
-	for i, v := range storages {
-		db, err := storage.New(v.Name, v.Dsn)
-		if err != nil {
-			return nil, err
-		}
-		w.dbs[i] = &db
-	}
-
 	return w, nil
 }
 
 func (w *Worker) Process(ctx context.Context) {
+	log.Printf("worker %d (%s) started\n", w.id, w.dbName)
+
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-t.C:
+			w.statCh <- w.queriesForApp
+
+			for k, _ := range w.queriesForApp {
+				w.queriesForApp[k] = 0
+			}
+
 		case query, ok := <-w.queryCh:
 			if !ok {
 				return
 			}
+			if query.Database != w.dbName {
+				w.queryCh <- query
+				continue
+			}
+
+			app, exists := w.queriesForApp[query.AppName]
+			if !exists {
+				w.queriesForApp[query.AppName] = 1
+			} else {
+				w.queriesForApp[query.AppName] = app + 1
+			}
+
+			w.queriesAll++
+
 			resp, err := w.process(ctx, query)
 			if err != nil {
 				w.errCh <- err
 				continue
 			}
-			log.Printf("worker %d processed query: %d from app %s\n", w.id, query.Id, query.AppId)
+
+			log.Printf("worker %d processed query from app %s (all: %d)\n", w.id, query.AppName, w.queriesAll)
 			w.respCh <- resp
 		}
 	}

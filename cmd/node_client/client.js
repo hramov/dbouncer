@@ -25,10 +25,14 @@ client.connect(2379, '127.0.0.1', function() {
     const obj = {
         id:       1,
         app_id:    appId,
+        app_name: 'test',
         database: 'postgres',
         kind:     'query',
         query:    'select * from pg_stat_activity',
         params:   null,
     }
-    client.write(JSON.stringify(obj));
+
+    // for (let i = 0; i < 10; i++) {
+        client.write(JSON.stringify(obj));
+    // }
 });

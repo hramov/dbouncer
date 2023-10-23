@@ -13,17 +13,18 @@ type Storage struct {
 	Name        string        `yaml:"name"`
 	Dsn         string        `yaml:"dsn"`
 	PoolMax     int           `yaml:"pool_max"`
-	PoolMin     int           `yaml:"pool_min"`
 	IdleMax     int           `yaml:"idle_max"`
-	IdleMin     int           `yaml:"idle_min"`
 	IdleTimeout time.Duration `yaml:"idle_timeout"`
+	LifeTime    time.Duration `yaml:"life_time"`
+	Workers     int           `yaml:"workers"`
 }
 
 type Config struct {
-	Version  string
-	Port     int           `yaml:"port"`
-	Timeout  time.Duration `yaml:"timeout"`
-	Storages []Storage     `yaml:"storages"`
+	Version     string
+	Port        int           `yaml:"port"`
+	MetricsPort int           `yaml:"metrics_port"`
+	Timeout     time.Duration `yaml:"timeout"`
+	Storages    []Storage     `yaml:"storages"`
 }
 
 func LoadConfig(configPath string, cfg *Config) error {
