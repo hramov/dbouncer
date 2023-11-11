@@ -10,6 +10,7 @@ import (
 	"github.com/hramov/dbouncer/pkg/storage"
 	"github.com/joho/godotenv"
 	"log"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 )

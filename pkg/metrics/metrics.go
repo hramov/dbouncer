@@ -3,7 +3,6 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"github.com/hramov/dbouncer/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -24,15 +23,15 @@ func collectStat(ctx context.Context, statCh chan map[string]int) {
 		select {
 		case <-ctx.Done():
 			return
-		case stat, ok := <-statCh:
+		case _, ok := <-statCh:
 			if !ok {
 				return
 			}
-			queriesAll := utils.MergeStatMapsAll(statMap, stat)
-
-			if queriesAll > 0 {
-				queriesProcessed.Add(float64(queriesAll))
-			}
+			//queriesAll := utils.MergeStatMapsAll(statMap, stat)
+			//
+			//if queriesAll > 0 {
+			//	queriesProcessed.Add(float64(queriesAll))
+			//}
 		}
 	}
 }

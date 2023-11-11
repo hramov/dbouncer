@@ -9,4 +9,4 @@ storages:
     idle_max: 1
     idle_timeout: '60s'
     life_time: '10m'
-    workers: 1
+    workers: 10

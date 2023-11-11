@@ -8,6 +8,8 @@ import (
 	"github.com/hramov/dbouncer/internal"
 	"github.com/hramov/dbouncer/pkg/jsonify"
 	"github.com/hramov/dbouncer/pkg/storage/drivers"
+	"log"
+	"sync"
 	"time"
 )
 
@@ -18,6 +20,7 @@ type storage struct {
 type storageMap = map[string]internal.Storage
 
 var storages storageMap
+var mu = &sync.RWMutex{}
 
 func (s *storage) QueryTx(ctx context.Context, query string, args ...interface{}) ([]string, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{
@@ -27,6 +30,7 @@ func (s *storage) QueryTx(ctx context.Context, query string, args ...interface{}
 	defer tx.Commit()
 
 	if err != nil {
+		log.Println("db error: ", err.Error())
 		return nil, err
 	}
 
@@ -47,62 +51,62 @@ func (s *storage) ExecTx(ctx context.Context, query string, args ...interface{})
 }
 
 func New(name string, dsn string, maxOpenConns int, maxIdleConns int, idleTimeout time.Duration, lifeTime time.Duration) (internal.Storage, error) {
+
+	var db *sql.DB
+	var err error
+
 	if storages == nil {
 		storages = make(storageMap)
 	}
 
-	if _, ok := storages[name]; !ok {
-		switch name {
-		case "postgres":
-			db, err := drivers.NewPostgres(dsn)
-			if err != nil {
-				return nil, err
-			}
-			db.SetMaxOpenConns(maxOpenConns)
-			db.SetMaxIdleConns(maxIdleConns)
-			db.SetConnMaxLifetime(lifeTime)
-			db.SetConnMaxIdleTime(idleTimeout)
-			st := &storage{
-				db: db,
-			}
-			storages["postgres"] = st
-			return st, nil
-		case "mssql":
-			db, err := drivers.NewMssql(dsn)
-			if err != nil {
-				return nil, err
-			}
-			db.SetMaxOpenConns(maxOpenConns)
-			db.SetMaxIdleConns(maxIdleConns)
-			db.SetConnMaxLifetime(lifeTime)
-			db.SetConnMaxIdleTime(idleTimeout)
-			st := &storage{
-				db: db,
-			}
-			storages["mssql"] = st
-			return st, nil
-		case "clickhouse":
-			db, err := drivers.NewClickhouse(dsn)
-			if err != nil {
-				return nil, err
-			}
-			db.SetMaxOpenConns(maxOpenConns)
-			db.SetMaxIdleConns(maxIdleConns)
-			db.SetConnMaxLifetime(lifeTime)
-			db.SetConnMaxIdleTime(idleTimeout)
-			st := &storage{
-				db: db,
-			}
-			storages["clickhouse"] = st
-			return st, nil
-		default:
-			return nil, fmt.Errorf("unknown storage: %s", name)
-		}
+	mu.RLock()
+	st, ok := storages[name]
+	mu.RUnlock()
+
+	if ok {
+		return st, nil
 	}
-	return storages[name], nil
+
+	switch name {
+	case "postgres":
+		db, err = drivers.NewPostgres(dsn)
+		if err != nil {
+			return nil, err
+		}
+	case "mssql":
+		db, err = drivers.NewMssql(dsn)
+		if err != nil {
+			return nil, err
+		}
+	case "clickhouse":
+		db, err = drivers.NewClickhouse(dsn)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unknown storage: %s", name)
+	}
+
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
+	db.SetConnMaxLifetime(lifeTime)
+	db.SetConnMaxIdleTime(idleTimeout)
+
+	st = &storage{
+		db: db,
+	}
+
+	mu.Lock()
+	storages[name] = st
+	mu.Unlock()
+
+	return st, nil
 }
 
 func GetStorage(name string) internal.Storage {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	st, ok := storages[name]
 	if !ok {
 		return nil

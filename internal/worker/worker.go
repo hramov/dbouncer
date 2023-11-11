@@ -70,7 +70,7 @@ func (w *Worker) Process(ctx context.Context) {
 
 			w.queriesAll++
 
-			resp, err := w.process(ctx, query)
+			resp, err := w.process(query)
 			if err != nil {
 				w.errCh <- err
 				continue
@@ -82,7 +82,12 @@ func (w *Worker) Process(ctx context.Context) {
 	}
 }
 
-func (w *Worker) process(ctx context.Context, query *internal.QueryRequest) (*internal.QueryResponse, error) {
+func (w *Worker) process(query *internal.QueryRequest) (*internal.QueryResponse, error) {
+
+	if query.Ctx.Err() != nil {
+		return nil, query.Ctx.Err()
+	}
+
 	st := storage.GetStorage(query.Database)
 
 	if st == nil {
@@ -94,15 +99,17 @@ func (w *Worker) process(ctx context.Context, query *internal.QueryRequest) (*in
 
 	switch query.Kind {
 	case "query":
-		data, err = st.QueryTx(ctx, query.Query, query.Params...)
+		data, err = st.QueryTx(query.Ctx, query.Query, query.Params...)
 	case "query_row":
-		data, err = st.QueryRowTx(ctx, query.Query, query.Params...)
+		data, err = st.QueryRowTx(query.Ctx, query.Query, query.Params...)
 	case "exec":
-		data, err = st.ExecTx(ctx, query.Query, query.Params...)
+		data, err = st.ExecTx(query.Ctx, query.Query, query.Params...)
 	}
 
 	if err != nil {
+		log.Println("data fetching error: ", err.Error())
 		return &internal.QueryResponse{
+			Ctx:    query.Ctx,
 			Id:     query.Id,
 			AppId:  query.AppId,
 			Kind:   query.Kind,
@@ -112,6 +119,7 @@ func (w *Worker) process(ctx context.Context, query *internal.QueryRequest) (*in
 	}
 
 	return &internal.QueryResponse{
+		Ctx:    query.Ctx,
 		Id:     query.Id,
 		AppId:  query.AppId,
 		Kind:   query.Kind,

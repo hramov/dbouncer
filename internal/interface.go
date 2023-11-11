@@ -21,21 +21,23 @@ const (
 )
 
 type QueryRequest struct {
-	Id       int       `json:"id"`
-	AppId    uuid.UUID `json:"app_id"`
-	AppName  string    `json:"app_name"`
-	Database string    `json:"database"`
-	Kind     QueryKind `json:"kind"`
-	Query    string    `json:"query"`
-	Params   []any     `json:"params"`
+	Ctx      context.Context `json:"-"`
+	Id       int             `json:"id"`
+	AppId    uuid.UUID       `json:"app_id"`
+	AppName  string          `json:"app_name"`
+	Database string          `json:"database"`
+	Kind     QueryKind       `json:"kind"`
+	Query    string          `json:"query"`
+	Params   []any           `json:"params"`
 }
 
 type QueryResponse struct {
-	Id     int       `json:"id"`
-	AppId  uuid.UUID `json:"app_id"`
-	Kind   QueryKind `json:"kind"`
-	Error  bool      `json:"error"`
-	Result any       `json:"result"`
+	Ctx    context.Context `json:"-"`
+	Id     int             `json:"id"`
+	AppId  uuid.UUID       `json:"app_id"`
+	Kind   QueryKind       `json:"kind"`
+	Error  bool            `json:"error"`
+	Result any             `json:"result"`
 }
 
 type App struct {

@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,12 +9,15 @@ import (
 	"github.com/hramov/dbouncer/internal"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
 const (
 	TCP = "tcp4"
 )
+
+var mu sync.RWMutex
 
 type Server struct {
 	port    int
@@ -76,7 +80,14 @@ func (s *Server) Response(ctx context.Context) {
 			if !ok {
 				return
 			}
+
+			if resp.Ctx.Err() != nil {
+				return
+			}
+
+			mu.RLock()
 			app := s.apps[resp.AppId]
+			mu.RUnlock()
 			err := s.send(ctx, app.Conn, resp)
 			if err != nil {
 				s.errCh <- fmt.Errorf("cannot send response: %v\n", err)
@@ -86,14 +97,16 @@ func (s *Server) Response(ctx context.Context) {
 }
 
 func (s *Server) send(ctx context.Context, conn net.Conn, data *internal.QueryResponse) error {
+	if conn == nil {
+		return fmt.Errorf("cannot send response: conn is nil")
+	}
+
 	msg, err := json.Marshal(data)
 	if err != nil {
-		log.Printf("cannot marshal response: %v\n", err)
 		return fmt.Errorf("cannot marshal response: %v\n", err)
 	}
 	_, err = conn.Write(msg)
 	if err != nil {
-		log.Printf("cannot write to conn: %v\n", err)
 		return fmt.Errorf("cannot write to conn: %v\n", err)
 	}
 	return nil
@@ -113,68 +126,82 @@ func (s *Server) parse(body []byte) (*internal.QueryRequest, error) {
 }
 
 func (s *Server) handle(ctx context.Context, conn net.Conn) {
-	buf := make([]byte, 4<<20)
+	connCtx, cancel := context.WithCancel(ctx)
+
 	appId := uuid.Nil
 
 	for {
-		n, err := conn.Read(buf)
+		netData, err := bufio.NewReader(conn).ReadString('\n')
 		if err != nil {
-			s.errCh <- fmt.Errorf("cannot read from listener: %v\n", err)
-			if appId != uuid.Nil {
-				app := s.apps[appId]
-				err = app.Conn.Close()
-				if err != nil {
-					s.errCh <- fmt.Errorf("cannot close app: %v\n", err)
-				}
-				delete(s.apps, appId)
-			}
+			log.Println(err.Error())
+			cancel()
 			return
 		}
-		var query *internal.QueryRequest
-		query, err = s.parse(buf[:n])
-		if err != nil {
-			s.errCh <- fmt.Errorf("cannot parse query: %v\n", err)
-			errResp := &internal.QueryResponse{
-				Id:     0,
-				Kind:   "",
-				Error:  true,
-				Result: []byte(err.Error()),
-			}
-			err = s.send(ctx, conn, errResp)
+
+		go func(netData string, err error) {
 			if err != nil {
-				s.errCh <- fmt.Errorf("cannot send error: %v\n", err)
+				if appId != uuid.Nil {
+					mu.Lock()
+					app := s.apps[appId]
+					if app.Conn != nil {
+						app.Conn.Close()
+					}
+					delete(s.apps, appId)
+					mu.Unlock()
+				}
+				return
 			}
-			continue
-		}
-
-		if query.AppId == uuid.Nil {
-			var id uuid.UUID
-			id, err = uuid.NewUUID()
+			var query *internal.QueryRequest
+			query, err = s.parse([]byte(netData))
 			if err != nil {
-				s.errCh <- fmt.Errorf("cannot generate uuid: %v\n", err)
+				s.errCh <- fmt.Errorf("cannot parse query: %v\n", err)
+				errResp := &internal.QueryResponse{
+					Id:     0,
+					Kind:   "",
+					Error:  true,
+					Result: err.Error(),
+				}
+				err = s.send(ctx, conn, errResp)
+				if err != nil {
+					s.errCh <- fmt.Errorf("cannot send error: %v\n", err)
+				}
+				return
 			}
-			app := &internal.App{
-				Id:      id,
-				Conn:    conn,
-				QueryId: query.Id,
+
+			if query.AppId == uuid.Nil {
+				var id uuid.UUID
+				id, err = uuid.NewUUID()
+				if err != nil {
+					s.errCh <- fmt.Errorf("cannot generate uuid: %v\n", err)
+				}
+				app := &internal.App{
+					Id:      id,
+					Conn:    conn,
+					QueryId: query.Id,
+				}
+
+				if app.QueryId == 0 {
+					app.QueryId = 1
+				}
+
+				mu.Lock()
+				s.apps[id] = *app
+				mu.Unlock()
+				query.AppId = id
+				log.Println("creating new app with id", query.AppId, "and name", query.AppName)
 			}
 
-			if app.QueryId == 0 {
-				app.QueryId = 1
-			}
+			mu.Lock()
+			app := s.apps[query.AppId]
+			app.QueryId++
+			s.apps[query.AppId] = app
+			mu.Unlock()
 
-			s.apps[id] = *app
-			query.AppId = id
-			log.Println("creating new app with id", query.AppId, "and name", query.AppName)
-		}
+			query.Id = app.QueryId
+			appId = query.AppId
 
-		app := s.apps[query.AppId]
-		app.QueryId++
-		s.apps[query.AppId] = app
-
-		query.Id = app.QueryId
-		appId = query.AppId
-
-		s.queryCh <- query
+			query.Ctx = connCtx
+			s.queryCh <- query
+		}(netData, err)
 	}
 }

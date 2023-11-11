@@ -33,8 +33,8 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println(response.Result)
 			appId = response.AppId
+			fmt.Println(response.Result)
 		}
 	}()
 
@@ -42,26 +42,36 @@ func main() {
 
 	var data []byte
 
-	for i := 0; i < 5; i++ {
-		msg := &internal.QueryRequest{
-			Id:       1,
-			AppId:    appId,
-			Database: "postgres",
-			Kind:     "query",
-			Query:    "select * from pg_stat_activity",
-			Params:   nil,
-		}
+	go func() {
+		for i := 0; i < 100; i++ {
+			msg := &internal.QueryRequest{
+				Id:       1,
+				AppId:    appId,
+				AppName:  "dbouncer",
+				Database: "postgres",
+				Kind:     "query",
+				Query:    `select pg_sleep(2)`,
+				Params:   nil,
+			}
 
-		data, err = json.Marshal(msg)
-		if err != nil {
-			panic(err)
-		}
+			data, err = json.Marshal(msg)
+			if err != nil {
+				panic(err)
+			}
 
-		n, err = conn.Write(data)
-		if err != nil {
-			panic(err)
-		}
+			data = append(data, '\n')
 
-		time.Sleep(2 * time.Second)
+			n, err = conn.Write(data)
+			if err != nil {
+				panic(err)
+			}
+
+			fmt.Println("sent message", i)
+
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	for {
 	}
 }
